@@ -4,16 +4,10 @@ Scrapes all products from [moremoneymorelove.de](https://moremoneymorelove.de), 
 
 ## Setup
 
-1. **Clone (replace `GITHUBURL` with your repo URL, e.g. `https://github.com/youruser/scraper-moremoneymorelove.git`):**
+1. **Clone:**
    ```bash
-   git clone GITHUBURL
+   git clone https://github.com/adrianpawlas/scraper-moremoneymorelove.git
    cd scraper-moremoneymorelove
-   ```
-   If you already have the repo locally, add your GitHub remote and push:
-   ```bash
-   git remote add origin GITHUBURL
-   git branch -M main
-   git push -u origin main
    ```
 
 2. **Create virtualenv and install dependencies:**
