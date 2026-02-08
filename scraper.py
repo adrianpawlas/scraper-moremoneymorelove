@@ -42,8 +42,8 @@ def _normalize_category(product_type: Optional[str]) -> Optional[str]:
     return out.strip() if out else None
 
 
-def _infer_gender(product: Dict[str, Any]) -> Optional[str]:
-    """Infer gender from product_type, tags, or title. Returns 'man', 'woman', or None."""
+def _infer_gender(product: Dict[str, Any]) -> str:
+    """Infer gender: 'woman' only for girls/women products, else 'man' (store is mostly men)."""
     tags = [t.upper() for t in (product.get("tags") or [])]
     ptype = (product.get("product_type") or "").upper()
     title = (product.get("title") or "").upper()
@@ -51,51 +51,42 @@ def _infer_gender(product: Dict[str, Any]) -> Optional[str]:
         return "woman"
     if "WOMEN" in ptype or "WOMEN" in title:
         return "woman"
-    return None  # unisex / man default
+    return "man"
 
 
-def _price_string(product: Dict[str, Any]) -> str:
-    """Build price string: current price in EUR (store currency). Format: 20.90EUR, ..."""
+def _price_string(product: Dict[str, Any]) -> Optional[str]:
+    """Original price only, with currency. e.g. 159.99EUR. Uses compare_at_price when present."""
     variants = product.get("variants") or []
     if not variants:
-        return ""
-    # Use first variant; compare_at_price = original, price = sale
+        return None
     v = variants[0]
-    price = v.get("price")
-    compare = v.get("compare_at_price")
-    parts = []
-    if price:
-        try:
-            p = float(price)
-            parts.append(f"{p:.2f}EUR")
-        except (TypeError, ValueError):
-            parts.append(f"{price}EUR")
-    if compare and str(compare) != str(price):
-        try:
-            c = float(compare)
-            if c != float(price):
-                parts.append(f"{c:.2f}EUR")
-        except (TypeError, ValueError):
-            pass
-    return ", ".join(parts)
+    compare = v.get("compare_at_price")  # original
+    price = v.get("price")  # fallback if no compare
+    value = compare or price
+    if not value:
+        return None
+    try:
+        return f"{float(value):.2f}EUR"
+    except (TypeError, ValueError):
+        return f"{value}EUR"
 
 
 def _sale_value(product: Dict[str, Any]) -> Optional[str]:
-    """Sale price if different from compare_at_price."""
+    """Sale price with currency when product is on sale. e.g. 54.99EUR."""
     variants = product.get("variants") or []
     if not variants:
         return None
     v = variants[0]
     price = v.get("price")
     compare = v.get("compare_at_price")
-    if not price or not compare:
+    if not price:
         return None
     try:
-        if float(price) < float(compare):
-            return str(price)
+        if compare and float(price) < float(compare):
+            return f"{float(price):.2f}EUR"
+        return None
     except (TypeError, ValueError):
-        pass
-    return None
+        return f"{price}EUR"
 
 
 def _product_url(handle: str) -> str:

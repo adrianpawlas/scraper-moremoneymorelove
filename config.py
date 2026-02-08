@@ -18,7 +18,7 @@ LIMIT_PER_PAGE = 50
 SOURCE = "scraper"
 BRAND = "Moremoney Morelove"
 SECOND_HAND = False
-COUNTRY = "DE"
+COUNTRY = None  # Always null for this source
 CURRENCY_DISPLAY = "EUR"  # Store shows EUR
 
 # Embeddings
