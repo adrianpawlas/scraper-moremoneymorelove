@@ -10,7 +10,7 @@ from io import BytesIO
 import torch
 import numpy as np
 from PIL import Image
-from transformers import AutoProcessor, AutoModel
+from transformers import SiglipModel, SiglipImageProcessor, SiglipTokenizer
 
 from config import EMBEDDING_MODEL, EMBEDDING_DIM, REQUEST_TIMEOUT
 
@@ -22,8 +22,10 @@ class EmbeddingGenerator:
 
     def __init__(self):
         logger.info("Loading SigLIP model: %s", EMBEDDING_MODEL)
-        self.processor = AutoProcessor.from_pretrained(EMBEDDING_MODEL)
-        self.model = AutoModel.from_pretrained(EMBEDDING_MODEL)
+        # Explicit classes avoid AutoProcessor tokenizer-mapping bug (NoneType.replace) in CI
+        self.image_processor = SiglipImageProcessor.from_pretrained(EMBEDDING_MODEL)
+        self.tokenizer = SiglipTokenizer.from_pretrained(EMBEDDING_MODEL)
+        self.model = SiglipModel.from_pretrained(EMBEDDING_MODEL)
         self.model.eval()
         self._embedding_dim = EMBEDDING_DIM
         logger.info("SigLIP loaded.")
@@ -70,7 +72,7 @@ class EmbeddingGenerator:
         if img is None:
             return None
         try:
-            inputs = self.processor(images=img, return_tensors="pt")
+            inputs = self.image_processor(images=img, return_tensors="pt")
             with torch.no_grad():
                 out = self.model.get_image_features(**inputs)
                 vec = out[0].cpu().numpy()
@@ -97,7 +99,7 @@ class EmbeddingGenerator:
             return None
         try:
             # Text-only: use tokenizer (get_text_features expects input_ids, attention_mask only)
-            inputs = self.processor.tokenizer(
+            inputs = self.tokenizer(
                 text.strip(),
                 padding="max_length",
                 max_length=64,
