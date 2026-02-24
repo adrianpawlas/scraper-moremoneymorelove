@@ -1,5 +1,6 @@
 """
 More Money More Love scraper: fetch all products, generate embeddings, upsert to Supabase.
+Smart sync: new products added, existing kept as-is, products no longer in catalog removed.
 Run: python main.py [--dry-run] [--limit N]
 """
 import argparse
@@ -9,7 +10,7 @@ from config import SUPABASE_KEY
 
 from scraper import stream_all_products, product_to_record
 from embeddings import EmbeddingGenerator
-from database import prepare_row, get_supabase_client, upsert_product
+from database import prepare_row, upsert_products, remove_stale_products
 
 logging.basicConfig(
     level=logging.INFO,
@@ -26,10 +27,10 @@ def run(dry_run: bool = False, limit: int | None = None):
 
     logger.info("Starting scraper (dry_run=%s, limit=%s)", dry_run, limit)
     gen = EmbeddingGenerator()
-    supabase = None if dry_run else get_supabase_client()
 
+    # 1) Collect all products and build rows (so we can batch upsert and know current set for sync)
+    rows: list = []
     total = 0
-    ok = 0
     for raw in stream_all_products():
         if limit is not None and total >= limit:
             logger.info("Reached limit %s", limit)
@@ -53,14 +54,32 @@ def run(dry_run: bool = False, limit: int | None = None):
             logger.warning("No info embedding for %s", title[:60])
 
         row = prepare_row(record, image_embedding=image_emb, info_embedding=info_emb)
-        if dry_run:
-            logger.info("Dry run: would upsert %s", row.get("title", "")[:50])
-            ok += 1
-            continue
-        if upsert_product(row, supabase):
-            ok += 1
+        rows.append(row)
 
-    logger.info("Done. Processed=%s, success=%s", total, ok)
+    if dry_run:
+        logger.info("Dry run: would upsert %s products (no DB write, no stale removal)", len(rows))
+        return
+
+    if not rows:
+        logger.info("No products to upsert.")
+        removed = remove_stale_products(set())
+        if removed:
+            logger.info("Removed %s stale product(s) no longer in catalog.", removed)
+        return
+
+    # 2) Batch upsert (PostgREST HTTP, reliable for scheduled runs)
+    if not upsert_products(rows):
+        logger.error("Upsert failed; skipping stale-removal to avoid data loss.")
+        sys.exit(1)
+    logger.info("Upserted %s products.", len(rows))
+
+    # 3) Smart sync: remove products for this source that are no longer in the catalog
+    current_ids = {r["id"] for r in rows}
+    removed = remove_stale_products(current_ids)
+    if removed:
+        logger.info("Removed %s stale product(s) no longer in catalog.", removed)
+
+    logger.info("Done. Processed=%s, upserted=%s, stale_removed=%s", total, len(rows), removed)
 
 
 if __name__ == "__main__":

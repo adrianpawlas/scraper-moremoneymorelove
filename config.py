@@ -1,8 +1,12 @@
 """Configuration for More Money More Love scraper."""
 import os
+from pathlib import Path
+
 from dotenv import load_dotenv
 
-load_dotenv()
+# Load .env from project directory so scheduled/midnight runs find it regardless of cwd
+_project_dir = Path(__file__).resolve().parent
+load_dotenv(_project_dir / ".env", override=False)
 
 # Supabase
 SUPABASE_URL = os.getenv("SUPABASE_URL", "https://yqawmzggcgpeyaaynrjk.supabase.co")
